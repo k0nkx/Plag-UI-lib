@@ -1,4 +1,4 @@
--- Modified UI Library
+-- Modified UI Library with Fixed Sections
 -- Maintains original visual style with improved structure
 
 local Players = game:GetService("Players")
@@ -75,7 +75,7 @@ local MainWindow = Utility.Create("Frame", {
     AnchorPoint = Vector2.new(0.5, 0.5),
     BackgroundColor3 = COLORS.Background,
     BorderSizePixel = 0,
-    Position = UDim2.new(0.285, 0, 0.65, 0),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
     Size = UDim2.new(0, 588, 0, 415),
     ZIndex = 2
 })
@@ -103,7 +103,8 @@ local HeaderLayout = Utility.Create("UIListLayout", {
     Parent = Header,
     FillDirection = Enum.FillDirection.Horizontal,
     SortOrder = Enum.SortOrder.LayoutOrder,
-    VerticalAlignment = Enum.VerticalAlignment.Center
+    VerticalAlignment = Enum.VerticalAlignment.Center,
+    Padding = UDim.new(0, 10)
 })
 
 local HeaderDivider = Utility.Create("Frame", {
@@ -174,7 +175,7 @@ local FPSCounter = Utility.Create("TextLabel", {
     Size = UDim2.new(0, 84, 0, 23),
     ZIndex = 3,
     Font = Enum.Font.SourceSansSemibold,
-    Text = "Not loaded.",
+    Text = "Loading...",
     TextColor3 = COLORS.Text,
     TextSize = 17,
     TextXAlignment = Enum.TextXAlignment.Right
@@ -610,6 +611,7 @@ function Window.Create(title)
     self.Sections = {}
     self.TabButtons = {}
     self.Content = nil
+    self.IsActive = false
     
     self:Build()
     return self
@@ -638,21 +640,23 @@ function Window:Build()
         Visible = false,
         ScrollBarThickness = 5,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-        TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png"
+        ScrollBarImageTransparency = 0.5,
+        BorderSizePixel = 0,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y
     })
     
-    local layout = Utility.Create("UIListLayout", {
+    local mainLayout = Utility.Create("UIListLayout", {
         Parent = self.Content,
         FillDirection = Enum.FillDirection.Horizontal,
-        SortOrder = Enum.SortOrder.LayoutOrder
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
     })
     
     self.LeftColumn = Utility.Create("Frame", {
         Name = "Left",
         Parent = self.Content,
         BackgroundTransparency = 1,
-        Size = UDim2.new(0.5, 0, 1, 0),
+        Size = UDim2.new(0.48, 0, 1, 0),
         ZIndex = 3,
         ClipsDescendants = true
     })
@@ -661,14 +665,14 @@ function Window:Build()
         Parent = self.LeftColumn,
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 5)
+        Padding = UDim.new(0, 10)
     })
     
     self.RightColumn = Utility.Create("Frame", {
         Name = "Right",
         Parent = self.Content,
         BackgroundTransparency = 1,
-        Size = UDim2.new(0.5, 0, 1, 0),
+        Size = UDim2.new(0.48, 0, 1, 0),
         ZIndex = 3,
         ClipsDescendants = true
     })
@@ -677,7 +681,7 @@ function Window:Build()
         Parent = self.RightColumn,
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 5)
+        Padding = UDim.new(0, 10)
     })
     
     -- Connect tab button
@@ -691,11 +695,13 @@ function Window:Build()
     if #UILibrary.Windows == 1 then
         self:Activate()
     end
+    
+    return self
 end
 
 function Window:CalculateTextWidth(text)
-    local baseWidth = #text * 7
-    return math.max(baseWidth, 50)
+    local baseWidth = #text * 10
+    return math.max(baseWidth, 60)
 end
 
 function Window:Activate()
@@ -705,28 +711,47 @@ function Window:Activate()
     if UILibrary.CurrentWindow then
         UILibrary.CurrentWindow.Content.Visible = false
         Utility.Tween(UILibrary.CurrentWindow.TabButton, {TextColor3 = COLORS.TextDisabled}, 0.26)
+        UILibrary.CurrentWindow.IsActive = false
     end
     
     -- Activate this window
     UILibrary.CurrentWindow = self
+    self.IsActive = true
     self.Content.Visible = true
     Utility.Tween(self.TabButton, {TextColor3 = Color3.fromRGB(210, 210, 210)}, 0.26)
+    
+    -- Update content size
+    self:UpdateSize()
 end
 
 function Window:UpdateSize()
+    task.wait(0.1) -- Wait for layout to update
+    
     local leftHeight = self.LeftLayout.AbsoluteContentSize.Y
     local rightHeight = self.RightLayout.AbsoluteContentSize.Y
-    local maxHeight = math.max(leftHeight, rightHeight)
+    local maxHeight = math.max(leftHeight, rightHeight) + 20
     
-    self.Content.CanvasSize = UDim2.new(0, 0, 0, maxHeight + 15)
+    -- Set column heights
+    self.LeftColumn.Size = UDim2.new(0.48, 0, 0, maxHeight)
+    self.RightColumn.Size = UDim2.new(0.48, 0, 0, maxHeight)
+    
+    -- Update canvas size
+    self.Content.CanvasSize = UDim2.new(0, 0, 0, maxHeight)
+    
+    -- Update background height
+    Background.Size = UDim2.new(0, 588, 0, math.min(365, maxHeight + 40))
+    MainWindow.Size = UDim2.new(0, 588, 0, math.min(415, maxHeight + 90))
 end
 
 function Window:AddSection(title, side)
-    local section = Section.Create(title, side == 2 and self.RightColumn or self.LeftColumn)
+    local column = side == 2 and self.RightColumn or self.LeftColumn
+    local layout = side == 2 and self.RightLayout or self.LeftLayout
+    
+    local section = Section.Create(title, column, layout)
     table.insert(self.Sections, section)
     
     -- Update window size after adding section
-    task.wait()
+    task.wait(0.05)
     self:UpdateSize()
     
     return section
@@ -736,12 +761,14 @@ end
 local Section = {}
 Section.__index = Section
 
-function Section.Create(title, parent)
+function Section.Create(title, parent, layout)
     local self = setmetatable({}, Section)
     
     self.Title = title or "Section"
     self.Parent = parent
+    self.Layout = layout
     self.Elements = {}
+    self.ElementCount = 0
     
     self:Build()
     return self
@@ -753,7 +780,8 @@ function Section:Build()
         Parent = self.Parent,
         BackgroundColor3 = Color3.fromRGB(20, 20, 20),
         BorderSizePixel = 0,
-        Size = UDim2.new(0.9, 0, 0, 138)
+        Size = UDim2.new(1, 0, 0, 150),
+        ZIndex = 3
     })
     
     self.Main = Utility.Create("Frame", {
@@ -764,11 +792,12 @@ function Section:Build()
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 1, 0),
+        Size = UDim2.new(0.98, 0, 0.98, 0),
         ZIndex = 4
     })
     
     Utility.AddStroke(self.Main, COLORS.Border, 1)
+    Utility.RoundCorners(self.Main, 4)
     
     self.Content = Utility.Create("Frame", {
         Name = "Content",
@@ -784,7 +813,7 @@ function Section:Build()
         Parent = self.Content,
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 4, 0, 5),
-        Size = UDim2.new(0.982, 0, 0.957, 0),
+        Size = UDim2.new(1, -8, 1, -10),
         ZIndex = 5
     })
     
@@ -792,7 +821,7 @@ function Section:Build()
         Parent = self.ElementHolder,
         SortOrder = Enum.SortOrder.LayoutOrder,
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
-        Padding = UDim.new(0, 5)
+        Padding = UDim.new(0, 8)
     })
     
     self.Divider = Utility.Create("Frame", {
@@ -810,8 +839,8 @@ function Section:Build()
         Parent = self.Main,
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.512, 0, 0.055, 0),
-        Size = UDim2.new(1, -20, 0, 22),
+        Position = UDim2.new(0.5, 0, 0.055, 0),
+        Size = UDim2.new(0.96, 0, 0, 22),
         ZIndex = 3,
         Font = Enum.Font.SourceSansSemibold,
         Text = self.Title,
@@ -824,29 +853,50 @@ function Section:Build()
     self.ElementLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         self:UpdateSize()
     end)
+    
+    -- Initial size update
+    self:UpdateSize()
+    
+    return self
 end
 
 function Section:UpdateSize()
+    task.wait(0.05) -- Small delay for layout update
+    
     local contentHeight = self.ElementLayout.AbsoluteContentSize.Y
-    self.Container.Size = UDim2.new(0.9, 0, 0, contentHeight + 30)
+    local newHeight = math.max(100, contentHeight + 40) -- Minimum height of 100
+    
+    self.Container.Size = UDim2.new(1, 0, 0, newHeight)
+    self.Content.Size = UDim2.new(1, 0, 0, newHeight - 30)
+    
+    -- Notify parent window to update
+    if self.Parent.Parent.Parent.UpdateSize then
+        self.Parent.Parent.Parent:UpdateSize()
+    end
 end
 
 function Section:AddLabel(text)
     local label = Utility.Create("TextLabel", {
         Parent = self.ElementHolder,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 11),
+        Size = UDim2.new(1, 0, 0, 20),
         Font = Enum.Font.SourceSansSemibold,
         Text = text,
         TextColor3 = COLORS.Text,
-        TextSize = 18,
+        TextSize = 16,
         TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
         AutomaticSize = Enum.AutomaticSize.Y
     })
     
-    return label
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
+    return {
+        SetText = function(newText)
+            label.Text = newText
+        end
+    }
 end
 
 function Section:AddButton(text, callback)
@@ -854,7 +904,7 @@ function Section:AddButton(text, callback)
         Parent = self.ElementHolder,
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 21),
+        Size = UDim2.new(1, 0, 0, 25),
         ZIndex = 14,
         ClipsDescendants = true
     })
@@ -865,11 +915,12 @@ function Section:AddButton(text, callback)
     local label = Utility.Create("TextLabel", {
         Parent = container,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 19),
+        Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.SourceSansBold,
         Text = text,
-        TextColor3 = Color3.fromRGB(84, 84, 84),
-        TextSize = 17
+        TextColor3 = Color3.fromRGB(180, 180, 180),
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Center
     })
     
     local button = Utility.Create("TextButton", {
@@ -883,29 +934,41 @@ function Section:AddButton(text, callback)
     AddRippleEffect(button, label, Color3.fromRGB(180, 180, 180))
     
     button.MouseButton1Click:Connect(function()
-        if callback then callback() end
+        if callback then 
+            callback() 
+        end
     end)
     
-    return button
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
+    return {
+        SetText = function(newText)
+            label.Text = newText
+        end,
+        SetCallback = function(newCallback)
+            callback = newCallback
+        end
+    }
 end
 
 function Section:AddToggle(text, defaultValue, keybind, callback)
     local container = Utility.Create("Frame", {
         Parent = self.ElementHolder,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 25),
         ZIndex = 14
     })
     
     local label = Utility.Create("TextLabel", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.083, 0, 0.013, 0),
-        Size = UDim2.new(0.92, 0, 0, 15),
+        Position = UDim2.new(0.08, 0, 0, 0),
+        Size = UDim2.new(0.7, 0, 1, 0),
         ZIndex = 15,
         Font = Enum.Font.SourceSansBold,
         Text = text,
-        TextColor3 = Color3.fromRGB(84, 84, 84),
+        TextColor3 = Color3.fromRGB(180, 180, 180),
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
     })
@@ -915,11 +978,12 @@ function Section:AddToggle(text, defaultValue, keybind, callback)
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = defaultValue and COLORS.ToggleOn or COLORS.ToggleOff,
         BorderSizePixel = 0,
-        Position = UDim2.new(0.019, 0, 0.387, 0),
-        Size = UDim2.new(0, 15, 0, 15),
+        Position = UDim2.new(0.95, 0, 0.5, 0),
+        Size = UDim2.new(0, 30, 0, 15),
         ZIndex = 15
     })
     
+    Utility.RoundCorners(toggleButton, 7)
     local stroke = Utility.AddStroke(toggleButton, COLORS.Border, 1)
     
     local button = Utility.Create("TextButton", {
@@ -939,7 +1003,7 @@ function Section:AddToggle(text, defaultValue, keybind, callback)
         }, 0.26)
         
         Utility.Tween(label, {
-            TextColor3 = state and Color3.fromRGB(152, 152, 152) or Color3.fromRGB(84, 84, 84)
+            TextColor3 = state and Color3.fromRGB(220, 220, 220) or Color3.fromRGB(180, 180, 180)
         }, 0.26)
         
         if callback then callback(state) end
@@ -949,30 +1013,34 @@ function Section:AddToggle(text, defaultValue, keybind, callback)
     
     -- Keybind support
     if keybind then
-        local keybindButton = self:CreateKeybindButton(keybind, container, function()
-            UpdateToggle()
-        end)
+        local keybindButton = self:CreateKeybindButton(keybind, container, UpdateToggle)
     end
     
     AddRippleEffect(button, label)
+    
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
     
     return {
         Update = function(value)
             state = value
             UpdateToggle()
         end,
-        GetState = function() return state end
+        GetState = function() return state end,
+        SetCallback = function(newCallback)
+            callback = newCallback
+        end
     }
 end
 
 function Section:CreateKeybindButton(keybind, parent, callback)
     local button = Utility.Create("TextButton", {
         Parent = parent,
-        AnchorPoint = Vector2.new(1, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
-        Position = UDim2.new(1.003, 0, 0.367, 0),
-        Size = UDim2.new(0, 45, 0, 15),
+        Position = UDim2.new(0.8, 0, 0.5, 0),
+        Size = UDim2.new(0, 40, 0, 18),
         ZIndex = 22,
         AutoButtonColor = false,
         Font = Enum.Font.ArialBold,
@@ -991,13 +1059,25 @@ function Section:CreateKeybindButton(keybind, parent, callback)
         Utility.Tween(button, {BackgroundColor3 = Color3.fromRGB(34, 34, 34)}, 0.1)
         button.Text = "..."
         
-        local input = UserInputService.InputBegan:Wait()
-        if input.KeyCode.Name ~= "Unknown" then
+        local input
+        local connection = UserInputService.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.Keyboard then
+                input = i
+                connection:Disconnect()
+            end
+        end)
+        
+        task.wait(2) -- Wait for input or timeout
+        
+        if input and input.KeyCode.Name ~= "Unknown" then
             isChanging = true
             Utility.Tween(button, {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}, 0.1)
             button.Text = input.KeyCode.Name
             keybind = input.KeyCode
             isChanging = false
+        else
+            button.Text = keybind.Name or "..."
+            Utility.Tween(button, {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}, 0.1)
         end
     end)
     
@@ -1014,33 +1094,33 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
     local container = Utility.Create("Frame", {
         Parent = self.ElementHolder,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, 40),
         ZIndex = 20
     })
     
     local label = Utility.Create("TextLabel", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.005, 0, 0.044, 0),
-        Size = UDim2.new(0.794, 0, 0, 10),
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(0.6, 0, 0, 20),
         ZIndex = 21,
         Font = Enum.Font.SourceSansSemibold,
         Text = text,
         TextColor3 = COLORS.Text,
-        TextSize = 16,
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
     local valueBox = Utility.Create("TextBox", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.798, 0, 0, 0),
-        Size = UDim2.new(0.202, 0, 0, 11),
+        Position = UDim2.new(0.7, 0, 0, 0),
+        Size = UDim2.new(0.3, 0, 0, 20),
         ZIndex = 23,
         ClearTextOnFocus = false,
         Font = Enum.Font.SourceSansBold,
         Text = tostring(defaultValue or math.floor((max + min) / 2)),
-        TextColor3 = Color3.fromRGB(90, 90, 90),
+        TextColor3 = Color3.fromRGB(150, 150, 150),
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Right
     })
@@ -1049,10 +1129,12 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
         Parent = container,
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
-        Position = UDim2.new(-0.002, 0, 0.491, 0),
-        Size = UDim2.new(1.002, 0, 0, 13),
+        Position = UDim2.new(0, 0, 0.6, 0),
+        Size = UDim2.new(1, 0, 0, 10),
         ZIndex = 23
     })
+    
+    Utility.RoundCorners(sliderTrack, 5)
     
     local sliderFill = Utility.Create("Frame", {
         Parent = sliderTrack,
@@ -1065,6 +1147,8 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
         ZIndex = 23
     })
     
+    Utility.RoundCorners(sliderFill, 5)
+    
     local stroke = Utility.AddStroke(sliderTrack, COLORS.Border, 1)
     
     local isDragging = false
@@ -1073,7 +1157,7 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
     local function UpdateSlider(value)
         value = math.clamp(value, min, max)
         currentValue = value
-        valueBox.Text = string.format("%.2f", value)
+        valueBox.Text = string.format("%.1f", value)
         sliderFill.Size = UDim2.fromScale((value - min) / (max - min), 1)
         
         if callback then callback(value) end
@@ -1082,8 +1166,8 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
     local sliderButton = Utility.Create("TextButton", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 1, 0, 19),
-        Size = UDim2.new(1, -2, 0, 13),
+        Position = UDim2.new(0, 0, 0.6, 0),
+        Size = UDim2.new(1, 0, 0, 10),
         ZIndex = 21,
         Text = "",
         AutoButtonColor = false
@@ -1109,10 +1193,10 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 isDragging = false
                 Utility.Tween(stroke, {Color = COLORS.Border}, 0.26)
-                Utility.Tween(valueBox, {TextColor3 = Color3.fromRGB(126, 126, 126)}, 0.3)
+                Utility.Tween(valueBox, {TextColor3 = Color3.fromRGB(150, 150, 150)}, 0.3)
                 
-                moveConnection:Disconnect()
-                releaseConnection:Disconnect()
+                if moveConnection then moveConnection:Disconnect() end
+                if releaseConnection then releaseConnection:Disconnect() end
             end
         end)
     end)
@@ -1122,13 +1206,19 @@ function Section:AddSlider(text, min, max, defaultValue, callback)
         if num then
             UpdateSlider(num)
         else
-            valueBox.Text = string.format("%.2f", currentValue)
+            valueBox.Text = string.format("%.1f", currentValue)
         end
     end)
     
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
     return {
         Update = UpdateSlider,
-        GetValue = function() return currentValue end
+        GetValue = function() return currentValue end,
+        SetCallback = function(newCallback)
+            callback = newCallback
+        end
     }
 end
 
@@ -1138,7 +1228,7 @@ function Section:AddDropdown(text, options, defaultValue, callback)
         BackgroundColor3 = Color3.fromRGB(22, 22, 22),
         BorderSizePixel = 0,
         ClipsDescendants = true,
-        Size = UDim2.new(1, 0, 0, 25),
+        Size = UDim2.new(1, 0, 0, 30),
         ZIndex = 27
     })
     
@@ -1148,7 +1238,7 @@ function Section:AddDropdown(text, options, defaultValue, callback)
         Parent = container,
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 30),
         AutoButtonColor = false,
         Text = " ",
         TextColor3 = Color3.fromRGB(255, 255, 255),
@@ -1162,13 +1252,13 @@ function Section:AddDropdown(text, options, defaultValue, callback)
         Parent = toggleButton,
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.448, 0, 0.455, 0),
-        Size = UDim2.new(0.826, 0, 0, 18),
+        Position = UDim2.new(0.4, 0, 0.5, 0),
+        Size = UDim2.new(0.7, 0, 0, 20),
         ZIndex = 30,
         Font = Enum.Font.SourceSansSemibold,
         Text = text,
         TextColor3 = COLORS.Text,
-        TextSize = 16,
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
@@ -1176,21 +1266,32 @@ function Section:AddDropdown(text, options, defaultValue, callback)
         Parent = toggleButton,
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.917, 0, 0.55, 0),
-        Size = UDim2.new(0, 14, 0, 14),
+        Position = UDim2.new(0.9, 0, 0.5, 0),
+        Size = UDim2.new(0, 20, 0, 20),
         ZIndex = 30,
         Font = Enum.Font.SourceSansSemibold,
-        Text = "+",
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 16,
-        TextXAlignment = Enum.TextXAlignment.Right
+        Text = "▼",
+        TextColor3 = Color3.fromRGB(200, 200, 200),
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Center
     })
     
-    local optionsLayout = Utility.Create("UIListLayout", {
+    local optionsContainer = Utility.Create("Frame", {
         Parent = container,
-        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 1, 5),
+        Size = UDim2.new(1, 0, 0, 0),
+        ZIndex = 28,
+        ClipsDescendants = true
+    })
+    
+    Utility.RoundCorners(optionsContainer, 4)
+    
+    local optionsLayout = Utility.Create("UIListLayout", {
+        Parent = optionsContainer,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 3)
+        Padding = UDim.new(0, 2)
     })
     
     local isOpen = false
@@ -1198,38 +1299,55 @@ function Section:AddDropdown(text, options, defaultValue, callback)
     
     local function CreateOption(option)
         local optionButton = Utility.Create("TextButton", {
-            Parent = container,
-            BackgroundColor3 = Color3.fromRGB(37, 37, 37),
+            Parent = optionsContainer,
+            BackgroundColor3 = Color3.fromRGB(40, 40, 40),
             BorderSizePixel = 0,
-            Size = UDim2.new(0.925, 0, 0, 16),
+            Size = UDim2.new(1, -10, 0, 25),
             ZIndex = 29,
             AutoButtonColor = false,
             Text = "",
-            TextColor3 = Color3.fromRGB(255, 255, 255),
-            TextSize = 16,
             Font = Enum.Font.SourceSansSemibold
         })
         
-        Utility.RoundCorners(optionButton, 4)
+        Utility.RoundCorners(optionButton, 3)
         
         local optionLabel = Utility.Create("TextLabel", {
             Parent = optionButton,
             AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
-            Position = UDim2.new(0.502, 0, 0.441, 0),
-            Size = UDim2.new(0.536, 0, 0, 15),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.new(0.9, 0, 0.8, 0),
             Font = Enum.Font.SourceSansSemibold,
             Text = option,
-            TextColor3 = Color3.fromRGB(255, 255, 255),
-            TextSize = 15
+            TextColor3 = Color3.fromRGB(220, 220, 220),
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left
         })
         
         optionButton.MouseButton1Click:Connect(function()
             selected = option
+            label.Text = text .. ": " .. option
             if callback then callback(option) end
+            
+            -- Close dropdown
+            isOpen = false
+            Utility.Tween(arrow, {Rotation = 0}, 0.2)
+            Utility.Tween(optionsContainer, {
+                Size = UDim2.new(1, 0, 0, 0)
+            }, 0.2)
+            
+            task.wait(0.2)
+            container.Size = UDim2.new(1, 0, 0, 30)
+            self:UpdateSize()
         end)
         
-        AddRippleEffect(optionButton, optionLabel)
+        optionButton.MouseEnter:Connect(function()
+            Utility.Tween(optionButton, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}, 0.2)
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            Utility.Tween(optionButton, {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}, 0.2)
+        end)
         
         return optionButton
     end
@@ -1238,28 +1356,43 @@ function Section:AddDropdown(text, options, defaultValue, callback)
         CreateOption(option)
     end
     
+    label.Text = text .. ": " .. selected
+    
     toggleButton.MouseButton1Click:Connect(function()
         isOpen = not isOpen
         
         if isOpen then
-            Utility.Tween(arrow, {Rotation = 180}, 0.26)
-            Utility.Tween(container, {
-                Size = UDim2.new(1, 0, 0, optionsLayout.AbsoluteContentSize.Y + 11)
+            Utility.Tween(arrow, {Rotation = 180}, 0.2)
+            local optionsHeight = optionsLayout.AbsoluteContentSize.Y + 10
+            Utility.Tween(optionsContainer, {
+                Size = UDim2.new(1, 0, 0, optionsHeight)
             }, 0.2)
+            
+            task.wait(0.2)
+            container.Size = UDim2.new(1, 0, 0, 35 + optionsHeight)
         else
-            Utility.Tween(arrow, {Rotation = 0}, 0.26)
-            Utility.Tween(container, {
-                Size = UDim2.new(1, 0, 0, 25)
+            Utility.Tween(arrow, {Rotation = 0}, 0.2)
+            Utility.Tween(optionsContainer, {
+                Size = UDim2.new(1, 0, 0, 0)
             }, 0.2)
+            
+            task.wait(0.2)
+            container.Size = UDim2.new(1, 0, 0, 30)
         end
+        
+        self:UpdateSize()
     end)
     
-    AddRippleEffect(toggleButton, arrow, Color3.fromRGB(180, 180, 180))
+    AddRippleEffect(toggleButton, label, Color3.fromRGB(180, 180, 180))
+    
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
     
     return {
         GetSelected = function() return selected end,
         SetSelected = function(value)
             selected = value
+            label.Text = text .. ": " .. value
             if callback then callback(value) end
         end
     }
@@ -1271,7 +1404,7 @@ function Section:AddColorPicker(text, defaultColor, callback)
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
         ClipsDescendants = true,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 30),
         ZIndex = 22
     })
     
@@ -1280,24 +1413,22 @@ function Section:AddColorPicker(text, defaultColor, callback)
     local button = Utility.Create("TextButton", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 7, 0, 2),
-        Size = UDim2.new(1, -14, 0, 18),
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(0.7, 0, 1, 0),
         ZIndex = 23,
         AutoButtonColor = false,
         Font = Enum.Font.SourceSansSemibold,
         Text = text,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 16,
+        TextColor3 = Color3.fromRGB(220, 220, 220),
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
     })
-    
-    Utility.RoundCorners(button, 5)
     
     local colorDisplay = Utility.Create("ImageLabel", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.853, 0, 0.182, 0),
-        Size = UDim2.new(0, 29, 0, 14),
+        Position = UDim2.new(0.8, 0, 0.2, 0),
+        Size = UDim2.new(0.15, 0, 0.6, 0),
         ZIndex = 23,
         Image = "rbxassetid://3570695787",
         ImageColor3 = defaultColor or Color3.new(1, 1, 1),
@@ -1306,6 +1437,8 @@ function Section:AddColorPicker(text, defaultColor, callback)
         SliceScale = 0.12
     })
     
+    Utility.RoundCorners(colorDisplay, 4)
+    
     button.MouseButton1Click:Connect(function()
         local picker = ColorPicker.Create(text, defaultColor, function(color)
             colorDisplay.ImageColor3 = color
@@ -1313,21 +1446,36 @@ function Section:AddColorPicker(text, defaultColor, callback)
         end)
         picker:Open()
     end)
+    
+    AddRippleEffect(button, nil, Color3.fromRGB(100, 100, 100))
+    
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
+    return {
+        SetColor = function(color)
+            colorDisplay.ImageColor3 = color
+            if callback then callback(color) end
+        end,
+        GetColor = function()
+            return colorDisplay.ImageColor3
+        end
+    }
 end
 
 function Section:AddTextBox(text, placeholder, clearOnFocus, inputType, callback)
     local container = Utility.Create("Frame", {
         Parent = self.ElementHolder,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 40),
         ZIndex = 14
     })
     
     local label = Utility.Create("TextLabel", {
         Parent = container,
         BackgroundTransparency = 1,
-        Position = UDim2.new(-0.009, 0, 0.013, 0),
-        Size = UDim2.new(0.708, 0, 0, 24),
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 20),
         ZIndex = 15,
         Font = Enum.Font.SourceSansBold,
         Text = text,
@@ -1338,27 +1486,28 @@ function Section:AddTextBox(text, placeholder, clearOnFocus, inputType, callback
     
     local inputContainer = Utility.Create("Frame", {
         Parent = container,
-        AnchorPoint = Vector2.new(1, 0.5),
         BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         BorderSizePixel = 0,
-        Position = UDim2.new(1.027, 0, 0.546, 0),
-        Size = UDim2.new(0, 70, 0, 16),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.new(1, 0, 0, 25),
         ZIndex = 25
     })
     
+    Utility.RoundCorners(inputContainer, 4)
     local stroke = Utility.AddStroke(inputContainer, Color3.fromRGB(52, 52, 52), 1)
     
     local textBox = Utility.Create("TextBox", {
         Parent = inputContainer,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0.05, 0, 0, 0),
+        Size = UDim2.new(0.9, 0, 1, 0),
         ZIndex = 28,
         ClearTextOnFocus = clearOnFocus or false,
-        Font = Enum.Font.ArialBold,
-        PlaceholderText = placeholder or "Input here",
+        Font = Enum.Font.Arial,
+        PlaceholderText = placeholder or "Type here...",
         Text = "",
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 10
+        TextColor3 = Color3.fromRGB(220, 220, 220),
+        TextSize = 14
     })
     
     -- Input filtering
@@ -1366,7 +1515,7 @@ function Section:AddTextBox(text, placeholder, clearOnFocus, inputType, callback
         [1] = "%D+", -- Numbers only
         [2] = "%p+", -- No special characters
         [3] = "%W+", -- No special characters or spaces
-        [4] = "%A+", -- Letters only
+        [4] = "%d+", -- Letters only (no numbers)
         [5] = "" -- No filter
     }
     
@@ -1377,22 +1526,15 @@ function Section:AddTextBox(text, placeholder, clearOnFocus, inputType, callback
             textBox.Text = textBox.Text:gsub(filter, "")
         end
         
-        if #textBox.Text > 21 then
-            textBox.Text = textBox.Text:sub(1, 21)
+        if #textBox.Text > 50 then
+            textBox.Text = textBox.Text:sub(1, 50)
         end
-        
-        -- Auto-size input box
-        local textWidth = #textBox.Text * 7
-        if textWidth < 70 then
-            textWidth = #placeholder * 6
-        end
-        
-        Utility.Tween(inputContainer, {
-            Size = UDim2.new(0, math.clamp(textWidth, 70, 150), 0, 16)
-        }, 0.4)
         
         if callback then callback(textBox.Text) end
     end)
+    
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
     
     return {
         SetText = function(text)
@@ -1400,6 +1542,45 @@ function Section:AddTextBox(text, placeholder, clearOnFocus, inputType, callback
         end,
         GetText = function()
             return textBox.Text
+        end,
+        SetCallback = function(newCallback)
+            callback = newCallback
+        end
+    }
+end
+
+function Section:AddKeyBind(text, defaultKey, callback)
+    local container = Utility.Create("Frame", {
+        Parent = self.ElementHolder,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 30),
+        ZIndex = 14
+    })
+    
+    local label = Utility.Create("TextLabel", {
+        Parent = container,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(0.6, 0, 1, 0),
+        ZIndex = 15,
+        Font = Enum.Font.SourceSansBold,
+        Text = text,
+        TextColor3 = COLORS.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+    
+    local keybindButton = self:CreateKeybindButton(defaultKey or Enum.KeyCode.RightAlt, container, callback)
+    
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
+    return {
+        SetKey = function(key)
+            keybindButton.Text = key.Name
+        end,
+        GetKey = function()
+            return keybindButton.Text
         end
     }
 end
@@ -1407,13 +1588,16 @@ end
 function Section:AddSeparator()
     local separator = Utility.Create("Frame", {
         Parent = self.ElementHolder,
-        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
-        Position = UDim2.new(0.016, 0, 0.491, 0),
-        Size = UDim2.new(0.968, 0, 0, 2),
+        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
+        Position = UDim2.new(0.05, 0, 0, 0),
+        Size = UDim2.new(0.9, 0, 0, 1),
         ZIndex = 22
     })
     
-    Utility.RoundCorners(separator, 10)
+    self.ElementCount = self.ElementCount + 1
+    self:UpdateSize()
+    
+    return separator
 end
 
 -- Public API
@@ -1435,12 +1619,13 @@ function UILibrary:AddWatermark(text)
         AnchorPoint = Vector2.new(0, 0.5),
         BackgroundColor3 = Color3.fromRGB(22, 22, 22),
         BorderSizePixel = 0,
-        Position = UDim2.new(0.011, 0, 0.973, 0),
-        Size = UDim2.new(0, #text * 7, 0, 28),
+        Position = UDim2.new(0.011, 0, 0.95, 0),
+        Size = UDim2.new(0, #text * 8 + 20, 0, 30),
         ZIndex = 8,
         ClipsDescendants = true
     })
     
+    Utility.RoundCorners(watermark, 6)
     Utility.AddStroke(watermark, COLORS.Accent, 1)
     
     local inner = Utility.Create("Frame", {
@@ -1453,25 +1638,30 @@ function UILibrary:AddWatermark(text)
         ZIndex = 7
     })
     
+    Utility.RoundCorners(inner, 4)
+    
     local label = Utility.Create("TextLabel", {
         Parent = inner,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0.022, 0, 0, 0),
-        Size = UDim2.new(1, -10, 1, 0),
+        Position = UDim2.new(0.05, 0, 0, 0),
+        Size = UDim2.new(0.9, 0, 1, 0),
         Font = Enum.Font.SourceSansSemibold,
         Text = text,
         TextColor3 = COLORS.Text,
-        TextSize = 16,
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
     return {
         SetText = function(newText)
             label.Text = newText
-            watermark.Size = UDim2.new(0, #newText * 7, 0, 28)
+            watermark.Size = UDim2.new(0, #newText * 8 + 20, 0, 30)
         end,
         SetVisible = function(visible)
             watermark.Visible = visible
+        end,
+        Destroy = function()
+            watermark:Destroy()
         end
     }
 end
